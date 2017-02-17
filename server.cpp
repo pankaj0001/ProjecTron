@@ -10,10 +10,10 @@ int main()
 	int i,player_count = 0;
 	sf::UdpSocket socket;
 	sf::IpAddress server_IP, Client_IP, Players_IP[4];
-	unsigned short Client_Port,Players_PORT[4],port = 55002;
+	unsigned short Client_Port,Players_PORT[4],port=55002, temp1;
 	bool take=true;
 
-	if(socket.bind(port) != sf::Socket::Done)
+	if(socket.bind(55002) != sf::Socket::Done)
 	{
 		std::cout << "Error in Port Binding port tried = "<< port << " " << std::endl;
 		return 0;
@@ -34,13 +34,18 @@ int main()
 		//Thread Here which check if input was there
 
 		//blocking Recieve so in thread
+
+
 		socket.receive(packet_client_initial_recieve, Client_IP, Client_Port);
+		cout<<"Recieve_connection";
+
 		packet_client_initial_recieve>>temp;
 		if(temp == 1)
 		{
 			Players_IP[player_count] = Client_IP;
-			Players_PORT[player_count++] = Client_Port;
-			cout<<" Connected: "<<player_count<<endl;
+			Players_PORT[player_count] = Client_Port;
+			cout<<" Connected: "<<player_count<<" "<<Client_IP<<":"<<Client_Port << endl;
+			player_count++;
 		}
 	}
 
@@ -51,50 +56,84 @@ int main()
 	{
 		position_x[i] = (sf::Uint16)(rand()%184);
 		position_y[i] = (sf::Uint16)(rand()%105);
-		packet_client_initial_send << i << position_x[i] << position_y[i];
-		socket.send(packet_client_initial_send, Players_IP[i], Players_PORT[i]);
 		packet_client_initial_send.clear();
+		packet_client_initial_send << i << position_x[i] << position_y[i];
+		cout<<socket.send(packet_client_initial_send, Players_IP[i], Players_PORT[i]);
+		cout<<"sent_initial_details to "<<Players_IP[i]<<":"<<Players_PORT[i]<<endl;
+		packet_client_initial_send >> i >> position_x[i] >> position_y[i];
+		cout<<i<<" "<<position_x[i]<<" "<<position_y[i]<<endl;
 		// packet_client_initial_send clear it before next Loop
 		//-------> wait for send complete or time >= wait_limit
 	}
 
-	sf::Time t1 = sf::seconds(0.1f);
-	sf::Clock clock;
+
+	//sf::Time t1 = sf::seconds(0.1f);
+	//sf::Clock clock;
 
 	while(true)
 	{
 		//Recieve Next Move of all( time wait 100 ms) (blocking Recieve so in thread)
-		sf::Time time1 = clock.getElapsedTime();
-		while(time1 <= t1)
-		{
+		//sf::Time time1 = clock.getElapsedTime();
+		//while(time1 <= t1)
+		//{
+		//	sf::Time time1 = clock.getElapsedTime();
+
+
+
 			socket.receive(packet_server_recieve, Client_IP, Client_Port);
-			packet_server_recieve>> id >> positionx >> positiony;
+			cout<<"Recieve: ";
+			packet_server_recieve >> temp >> id >> positionx >> positiony;
+			std::cout << id << " " << positionx << " "<< positiony << std::endl;
 			position_x[id] = positionx;
 			position_y[id] = positiony;
-		}
+		//}
 
-		for(i=0;i<player_count;i++)
-		{
-			packet_server_send_all << i << position_x[i] << position_y[i];
-		}
+			for(i=0;i<player_count;i++)
+			{
+				packet_server_send_all << i << position_x[i] << position_y[i];
+			}
 		
 		//Send Next Move to all
-		for(i=0;i<player_count;i++)
-		{
+
 			//check if sent
 			//sf::IpAddress::Broadcast To BroadCast to all Ips
-			socket.send(packet_server_send_all, sf::IpAddress::Broadcast, Client_Port);
-		}
+			for(i=0;i<player_count;i++)
+			{
+				socket.send(packet_server_send_all, Players_IP[i], Players_PORT[i]);
+			}
+			packet_server_send_all.clear();
+			packet_server_recieve.clear();
+//			packet_server_recieve.clear();
+//		packet_server_send_all.clear(); //packet_server_send_all clear this packet
 
-		packet_server_send_all.clear(); //packet_server_send_all clear this packet
-
-	sf::Time time2 = clock.restart();
+	//sf::Time time2 = clock.restart();
 	}
 	cout << endl;
 	return 0;
 }
 
-/**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+/** 
+Temp Not Working Sometimes 
 
 
 
