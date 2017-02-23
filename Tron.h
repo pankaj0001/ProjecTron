@@ -16,13 +16,21 @@ class Tron{
   private:
     std::array<std::array<int, Size_x>, Size_y> board;
     std::vector<sf::Vector2f> TronPartLocations;
-    long long int score;
-    int x,y;
+    long long int player_score;
+    int x,y,Player_id, player_color;
     status player_status;
+    std::string player_username, player_ip;
 
   public:
-    Tron();
+    Tron(int,int,string,int);
+    string get_username();
     status getStatus();
     void setStatus(status);
     void increment_Score();
-}
+    long long int get_score();
+    void set_speed(int,sf::RenderWindow&);
+    void init_board();
+    bool move(direction);
+    void draw(sf::RenderWindow&);
+    void clear_trails();
+};
