@@ -20,21 +20,6 @@ sf::IpAddress Players_IP[max_players];
 unsigned short Players_PORT[max_players];
 int player_count=0;
 
-void copy_location(sf::Uint16 [] old_location, sf::Uint16 [] new_location)
-{
-	for(int i=0; i<player_count; i++)
-	{
-		old_location[i] = new_location[i]; 
-	}
-}
-
-bool check_input()
-{
-	int temp;
-	std::cout << "Press \"1\" to stop recieving connections" << std::endl;
-	std::cin >> temp;
-	return(temp == 1);
-}
 
 void accept_connections()
 {
@@ -53,6 +38,22 @@ void accept_connections()
 		std::cout<<player_count<<" - "<<Client_IP<<":"<<Client_Port << endl;
 		player_count++;
 	}
+}
+
+void copy_location(sf::Uint16 [] old_location, sf::Uint16 [] new_location)
+{
+	for(int i=0; i<player_count; i++)
+	{
+		old_location[i] = new_location[i]; 
+	}
+}
+
+bool check_input()
+{
+	int temp;
+	std::cout << "Press \"1\" to stop recieving connections" << std::endl;
+	std::cin >> temp;
+	return(temp == 1);
 }
 
 void broadcast_players()
@@ -80,7 +81,7 @@ void initialize_and_send()
 		packet << i << players_direction[i] << new_position_x[i] << new_position_y[i];
 		socket.send(packet, Players_IP[i], Players_PORT[i]);
 		std::cout << "sent_initial_details to " << Players_IP[i] << ":" << Players_PORT[i] << std::endl;
-		std::cout << i << " " << new_position_x[i] << " " << new_position_y[i] << std::endl;
+		std::cout << i << " " << players_direction[i] << " " << new_position_x[i] << " " << new_position_y[i] << std::endl;
 	}
 }
 
@@ -111,7 +112,8 @@ bool check_recieved_all()
 	{
 		if(!recieved_position[i])
 			return false;
-	}	
+	}
+	return true;	
 }
 
 void location_update_by_server()
@@ -167,8 +169,6 @@ int main()
 	}
 	std::cout << "Connect to "<< server_IP.toString() << ":" << port << " For Incomming Connections" << std::endl;
 
-
-
 	accept_connections();
 	initialize_and_send();
 	
@@ -178,7 +178,33 @@ int main()
 
 
 
+}
 
+/*
+1- C -> S (thread - "s" to stop waiting)
+2- S -> all C = their id and initial position and direction 
+3- S <- C = update locations / direction (thread - till game over)
+4- S -> C = All client Location
+repeat 3-4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	/*
 	while(true)
 	{
 		//Recieve Next Move of all( time wait 100 ms) (blocking Recieve so in thread)
@@ -238,7 +264,7 @@ int main()
 
 
  
-/** 
+ 
 Temp Not Working Sometimes 
 
 
