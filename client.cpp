@@ -47,7 +47,7 @@ sf::Uint16 get_initials()
 }
 
 
-void send_my_location(direction dir, sf::Uint16 x, sf::Uint16 y)
+void send_my_location(sf::Uint16 dir, sf::Uint16 x, sf::Uint16 y)
 {
 	sf::Packet packet;
 	packet << my_id << dir << x << y;
@@ -63,7 +63,6 @@ int main()
 {
 
 	socket.bind(55001);
-
  	connect_server(server_ip, server_port);
  	my_id = get_initials();
  	get_locations()	// In Thread and till A Player wins
