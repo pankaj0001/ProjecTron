@@ -1,0 +1,39 @@
+1-  Start Page Containing [ New Game , High Scores , Exit , Keys ].
+2-  Add Scores of all Players At Bottom.
+3-  Add Threading ( c++11 Threads ) - Each Player 2 Threads [1 for network recieve and 1 for network send].
+4-  Collisions update for For >= 1 player.
+5-  Color Update For >= 1 player.
+6-  Player Username, Score Store.
+7-  BackGround For StartPage.
+8-  Texture for player instead of its color(texture glowing like).
+9-  After Collision, Game Should be displaying the screen just before end not a new Screen.
+10- Play AGain Screen.
+11- Option to change Speed
+
+Threads
+1 - Player Move
+2 - Board & Score Update
+3 - Other Players next move
+4 - Send Other Players My next location
+5 - 
+
+
+
+Collision Cases - 
+1 - Head to Head Collisions
+2 - Head to Body(self)
+3 - player1_Head to player2_Body + player2_Head to player1_Body ( ie circular a to b , b to c ...... z to a)
+4 - 
+
+
+Player Details
+
+1 - Username
+2 - Score
+3 - IP:PORT
+4 - 
+
+
+
+
+                                             

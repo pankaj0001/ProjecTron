@@ -1,6 +1,87 @@
 #include <SFML/Network.hpp>
 #include <iostream>
 using namespace std;
+#define max_players 4
+enum direction {up=0, right=1, down=2, left=3} my_direction;
+int my_id = 0, player_count = 2; // PlayerCount Sent By Server
+sf::String username = "Pankaj";
+sf::UdpSocket socket;
+sf::Uint16 position_x[max_players], position_y[max_players];
+
+//Change it to cin>>" Enter Serve IP - "<<endl;
+sf::IpAddress server_ip = sf::IpAddress::getLocalAddress();
+unsigned short server_port = 55002;
+
+
+void connect_server(sf::IpAddress ip, unsigned short port)
+{
+	sf::Packet packet;
+ 	packet << username;
+	socket.send(packet, ip, port);
+}
+
+
+void get_locations()
+{
+	sf::IpAddress ip;
+	sf::Packet packet;
+	unsigned short port;
+	socket.receive(packet, ip, port);
+	std::cout << "Recieved locations "<<std::endl;
+	for(i=0;i<player_count;i++)
+	{
+		packet >> temp >> id;
+		packet >> position_x[id] >> position_y[id];
+	}
+}
+
+sf::Uint16 get_initials()
+{
+	sf::IpAddress ip;
+	sf::Packet packet;
+	sf::Uint16 id;
+	unsigned short port;
+	socket.receive(packet, ip, port);
+	packet >> id;
+	return id;
+}
+
+
+void send_my_location(direction dir, sf::Uint16 x, sf::Uint16 y)
+{
+	sf::Packet packet;
+	packet << my_id << dir << x << y;
+	socket.send(packet, server_ip, server_port);
+}
+
+
+
+
+
+
+int main()
+{
+
+	socket.bind(55001);
+
+ 	connect_server(server_ip, server_port);
+ 	my_id = get_initials();
+ 	get_locations()	// In Thread and till A Player wins
+ 	
+ 	//Update My Location
+ 	
+	send_my_location(my_direction, position_x[my_id], position_y[my_id]); //Send In thread
+
+	return 0;
+}
+	
+
+/*Old Working Client
+
+
+#include <SFML/Network.hpp>
+#include <iostream>
+using namespace std;
 using namespace sf;
 int ID = 0;
 int main()
@@ -35,7 +116,7 @@ int main()
 	positionx++; 
 	positiony++;
 
-
+ 
 
 	int loopcount=1;
 	while(loopcount != 10)
@@ -64,3 +145,6 @@ int main()
 	return 0;
 }
 	
+
+
+*/
