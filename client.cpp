@@ -2,18 +2,19 @@
 #include <iostream>
 #include <thread>
 #include <unistd.h>
-#include <mutex>
 using namespace std;
 
 #define max_players 4
-//enum direction {up=0, right=1, down=2, left=3} my_direction;
-int my_id, player_count = 2; // PlayerCount Sent By Server
+enum direction {up=0, right=1, down=2, left=3} my_direction;
+int my_id = 0, player_count = 2; // PlayerCount Sent By Server
 sf::String username = "Pankaj";
 sf::UdpSocket socket;
-sf::Uint16 position_x[max_players], position_y[max_players], players_direction[max_players];
-sf::IpAddress server_ip;
+sf::Uint16 position_x[max_players], position_y[max_players];
+
+
+//Change it to cin>>" Enter Serve IP - "<<endl;
+sf::IpAddress server_ip = sf::IpAddress::getLocalAddress();
 unsigned short server_port = 55002;
-std::mutex m;
 
 
 void connect_server(sf::IpAddress ip, unsigned short port)
@@ -21,75 +22,58 @@ void connect_server(sf::IpAddress ip, unsigned short port)
 	sf::Packet packet;
  	packet << username;
 	socket.send(packet, ip, port);
-	std::string s_username = username;
-	std::cout<<s_username<<std::endl;
 }
 
 
 void get_locations()
 {
-
 	sf::IpAddress ip;
 	sf::Packet packet;
 	unsigned short port;
-	sf::Uint16 id, temp , temp1, temp2 , temp3;
+	int temp;
+	sf::Uint16 id;
 	socket.receive(packet, ip, port);
-	for(int i=0;i<player_count;i++)
-	{
-		packet >> temp >> id;
-		packet >> players_direction[id] >> position_x[id] >> position_y[id];
-	}
-	m.lock();
 	std::cout << "Recieved locations "<<std::endl;
 	for(int i=0;i<player_count;i++)
 	{
-		std::cout << i << " " << players_direction[i] << " " << position_x[i] << " " << position_y[i] << std::endl;
+		packet >> temp >> id;
+		packet >> position_x[id] >> position_y[id];
 	}
-	m.unlock();
+	
 }
 
-void recieve_location()
-{
-	while(true)
-	{
+
+void receive_location(){
+	while(true){
 		get_locations();
 	}
 }
 
-
-sf::Uint16 get_id()
+sf::Uint16 get_initials()
 {
 	sf::IpAddress ip;
 	sf::Packet packet;
+	sf::Uint16 id;
 	unsigned short port;
 	socket.receive(packet, ip, port);
-	packet >> my_id;
-	std::cout<<my_id<<std::endl;
+	packet >> id;
+	return id;
 }
 
 
 void send_my_location(sf::Uint16 dir, sf::Uint16 x, sf::Uint16 y)
-{
+{/*
+	position_x[my_id] = x;
+	position_x[my_id] = y;*/
 	sf::Packet packet;
 	packet << my_id << dir << x << y;
-	m.lock();
-	std::cout<<"sent - "<< my_id <<" " << dir<<" "<< x << " " <<y;
-	m.unlock();
 	socket.send(packet, server_ip, server_port);
 }
 
 void send_location(){
-	sf::Uint16 x,y,dir;
-	while(true)
-	{
-		usleep(100000);
-		dir = players_direction[my_id];
-		x = position_x[my_id];
-		x++;
-		y = position_y[my_id];
-		y++;
-		send_my_location(dir,x,y);
-
+	while(true){
+		usleep(50000);
+		send_my_location(my_direction, position_x[my_id], position_y[my_id]); //Send In thread
 	}
 }
 
@@ -100,21 +84,23 @@ int main()
 {
 	cout<<"Enter Server's IP address" << endl;
 	cin >> server_ip;
+
 	socket.bind(sf::Socket::AnyPort);
-	std::thread t,s;
+	thread t,s;
  	connect_server(server_ip, server_port);
- 	get_id();
- 	get_locations();
-	t = thread(recieve_location);
+	std::cout<<"here"<<std::endl;
+ 	my_id = get_initials();
+	t = thread(receive_location);
+ 	//get_locations()	// In Thread and till A Player wins
+
+ 	//Update My Location
 	s = thread(send_location);
 	s.join();
 	t.join();
+	//send_my_location(my_direction, position_x[my_id], position_y[my_id]); //Send In thread
 
 	return 0;
 }
-
-
-
 
 
 /*Old Working Client
