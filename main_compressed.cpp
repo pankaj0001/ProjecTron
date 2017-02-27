@@ -12,15 +12,16 @@
 
 sf::Uint16 player_count, speed;
 sf::UdpSocket socket_client;
-std::mutex mutex_client;
+// std::mutex mutex_client;
 sf::IpAddress server_ip;
 unsigned short server_port = 55002;
 int bound_x = Size_x-1;
 int bound_y = Size_y-1;
 int my_id;
-sf::Uint16 new_position_x[max_players], new_position_y[max_players], new_direction[max_players];
-sf::Uint16 old_position_x[max_players], old_position_y[max_players], old_direction[max_players];
+sf::Uint16 new_position_x[max_players], new_position_y[max_players];
+sf::Uint16 old_position_x[max_players], old_position_y[max_players];
 sf::Uint16 player_status[max_players], players_direction[max_players], dead[max_players];
+sf::Uint16 dir=1, next_x, next_y;
 
 
 
@@ -44,12 +45,13 @@ class Tron{
     long long int get_score(); 
     void set_speed(sf::RenderWindow&);
     void init_board();
-    bool move(sf::Uint16);
+    void move(sf::Uint16);
     void draw(sf::RenderWindow&);
     void clear_trails();
     void update_board();
     void Remove_player(int);
     void draw_initials();
+    bool check_collision();
 
 };
 
@@ -97,7 +99,7 @@ long long int Tron::get_score()
 
 void Tron::set_speed(sf::RenderWindow& targetWindow)
 {
-    targetWindow.setFramerateLimit(5);
+    targetWindow.setFramerateLimit(30);
 }
 
 void Tron::init_board()
@@ -128,26 +130,23 @@ void Tron::init_board()
     }
 }
 
-bool Tron::move(sf::Uint16 Dir)
+void Tron::move(sf::Uint16 Dir)
 {
-    board.at(old_position_y[my_id]).at(old_position_x[my_id]) = my_id + 1;
-    if      (Dir == 0) { new_position_y[my_id] = new_position_y[my_id] - 1;}
-    else if (Dir == 1) { new_position_x[my_id] = new_position_x[my_id] + 1;}
-    else if (Dir == 2) { new_position_y[my_id] = new_position_y[my_id] + 1;}
-    else if (Dir == 3) { new_position_x[my_id] = new_position_x[my_id] - 1;}
-    else if (Dir == 4) { new_position_x[my_id] = -1; new_position_y[my_id] = -1; player_status[my_id] = 0;}
-
+    dir = Dir;
+    if      (Dir == 0) { next_y = new_position_y[my_id] - 1; next_x = new_position_x[my_id];}
+    else if (Dir == 1) { next_x = new_position_x[my_id] + 1; next_y = new_position_y[my_id];}
+    else if (Dir == 2) { next_y = new_position_y[my_id] + 1; next_x = new_position_x[my_id];}
+    else if (Dir == 3) { next_x = new_position_x[my_id] - 1; next_y = new_position_y[my_id];}
+}
+bool Tron::check_collision()
+{
     //Check for Collisions - Wall and Player
     if(board.at(new_position_y[my_id]).at(new_position_x[my_id]) != 0)
     {
         this->clear_trails();
-        return false;
+        return true;
     }
-    else
-    {
-        board.at(new_position_y[my_id]).at(new_position_x[my_id]) = my_id + 1;
-    }
-    return true;
+    return false;
 }
 
 void Tron::draw(sf::RenderWindow& targetWindow)
@@ -212,20 +211,36 @@ void Tron::Remove_player(int id)
 
 void Tron::update_board()
 {
-    for(int i=0; i<player_count; i++)
+    for(int i=0; i<player_count && player_status[i] == (sf::Uint16)1; i++)
     {
-    	if(player_status[i] == (sf::Uint16)1)
-    	{
-	        board.at(new_position_y[i]).at(new_position_x[i]) = my_id + 1;
-	        board.at(old_position_y[i]).at(old_position_x[i]) = my_id + 1;
-    	}
-    	else
-    	{
-    		this->Remove_player(i);
-    	}
+        board.at(new_position_y[i]).at(new_position_x[i]) = i + 1;
+		//board.at(old_position_y[i]).at(old_position_x[i]) = i + 1;
     }
+	for(int i=0; i<player_count && player_status[i] == (sf::Uint16)0 && dead[i] == (sf::Uint16)0; i++)
+    {
+        dead[i] = (sf::Uint16)1;
+		this->Remove_player(i);
+	}
 }
 
+
+void copy_location(sf::Uint16 old_location[], sf::Uint16 new_location[])
+{
+	for(int i=0; i<player_count; i++)
+	{
+		old_location[i] = new_location[i]; 
+	}
+}
+
+void print_location()
+{	
+	// std::cout<<"printing locations: ";
+	for(int i=0;i<player_count;i++)
+	{
+		std::cout << " " << i << " " << player_status[i] << " " << dir << " " << new_position_x[i] << " " << new_position_y[i] << std::endl;
+	}
+
+}
 
 namespace client
 {
@@ -246,13 +261,19 @@ namespace client
         sf::IpAddress ip;
         sf::Packet packet;
         unsigned short port;
-        sf::Uint16 id;
+        int id;
         socket_client.receive(packet, ip, port);
         for(int i=0;i<player_count;i++)
         {
-            packet >> temp >> id;
+            packet >> id;
+            // sf::Uint16 temp
+            // packet >> temp >> id;
             // std::cout<<temp;
             packet >> player_status[id] >> players_direction[id] >> new_position_x[id] >> new_position_y[id];
+        }
+        if(new_position_x[my_id] == old_position_x[my_id] && new_position_y[my_id] == old_position_y[my_id])
+        {
+            get_locations();
         }
         // mutex_client.lock();
         // std::cout << "Recieved locations "<<std::endl;
@@ -276,7 +297,6 @@ namespace client
     {
         sf::IpAddress ip;
         sf::Packet packet; 
-        sf::Uint16 tempa[10];
         unsigned short port;
         socket_client.receive(packet, ip, port);
         packet >> my_id >> player_count >> speed;
@@ -286,7 +306,7 @@ namespace client
         	player_status[i] = 1;
 		}
 
-        // std::cout<<my_id<<player_count<<speed<<std::endl;
+        std::cout<<my_id<<player_count<<speed<<std::endl;
     }
 
 
@@ -295,7 +315,7 @@ namespace client
         sf::Packet packet;
         packet << my_id << player_status[my_id] << dir << x << y;
         // mutex_client.lock();
-        // std::cout<<"sent - "<< my_id <<" " << dir<<" "<< x << " " <<y;
+        std::cout<<"Send : "<< my_id <<" " << player_status[my_id] <<" "<<dir<<" "<< x << " " <<y<<std::endl;
         // mutex_client.unlock();
         socket_client.send(packet, ip, port);
     }
@@ -303,44 +323,22 @@ namespace client
     void send_location(){
         while(true)
         {
-            sleep(1);
-            send_my_location(server_ip, server_port, players_direction[my_id], new_position_x[my_id], new_position_y[my_id]);
+            send_my_location(server_ip, server_port, dir , next_x, next_y);
 
         }
     }
 }
 
 
+
 int main()
 {
 
-    sf::Uint16 dir = 1, initial_position_x = rand()%Size_x, initial_position_y = rand()%Size_y; //temp
+    sf::Uint16 initial_position_x = rand()%Size_x, initial_position_y = rand()%Size_y; //temp
     sf::Texture texture;
     sf::Sprite sprite(texture);
 
     std::string f_str, server_ip_std;
-
-    //Ask Username
-    //Send Connect Req To Server
-    //Get ID
-    //Get All Initial Locations
-    //Game Start
-    sf::String my_username = "^[P]ROTO[N]^";
-    server_ip = sf::IpAddress("172.16.0.199");
-    socket_client.bind(sf::Socket::AnyPort);
-    client::connect_server(server_ip, server_port, my_username);
-    client::get_inititals();
-    client::get_locations();
-
-    std::thread t1,t2;
-    t1 = std::thread(client::recieve_location);
-    t2 = std::thread(client::send_location);
-    Tron *player2 = new Tron(new_position_x[my_id], new_position_y[my_id], my_username, my_id, player_count, speed);
-    Tron player1 = *player2;
-
-    // std::cout<<"hereeee";
-
-
 
     sf::Font font;
     font.loadFromFile("arial.ttf");
@@ -350,9 +348,24 @@ int main()
     score_text.setColor(sf::Color::Red);
     score_text.setPosition(350,450);
     score_text.setCharacterSize(100);
-
-    sleep(5);
-
+    //Ask Username
+    //Send Connect Req To Server
+    //Get ID
+    //Get All Initial Locations
+    //Game Start
+    sf::String my_username = "^[P]ROTO[N]^";
+    socket_client.bind(sf::Socket::AnyPort);
+    server_ip = sf::IpAddress("192.168.43.207");
+    client::connect_server(server_ip, server_port, my_username);
+    client::get_inititals();
+    client::get_locations();
+    std::cout<<"Init : "<<std::endl;
+    print_location();
+    Tron *player2 = new Tron(new_position_x[my_id], new_position_y[my_id], my_username, my_id, player_count, speed);
+    Tron player1 = *player2;
+    
+    // std::thread t1;
+  	//  t1 = std::thread(client::recieve_location);
     sf::RenderWindow window(sf::VideoMode(1920, 1080), "Game Window");
     window.setVerticalSyncEnabled(true);
     player1.set_speed(window);
@@ -393,20 +406,29 @@ int main()
 
         //if player is alive
         if(player1.getStatus() == 1)
+        {
+        	player1.move(dir);
+        	client::send_my_location(server_ip, server_port, dir , next_x, next_y);
+            copy_location(old_position_y, new_position_y);
+            copy_location(old_position_x, new_position_x);
+        	client::get_locations();
+            std::cout<<"Recv :";
+        	print_location();
+            if(player1.check_collision())
             {
-                if(!player1.move(dir))
-                {
-                    player1.setStatus(0);
-                    f_str = std::to_string(player1.get_score());
-                    score_text.setString("Your Score is "+f_str);
-                }
-                else
-                {
-                	player1.update_board();
-                    player1.increment_Score();
-                    player1.draw(window);
-                }
+                std::cout<<"Coli :";
+                print_location();
+                player1.setStatus(0);
+                f_str = std::to_string(player1.get_score());
+                score_text.setString("Your Score is "+f_str);
             }
+            else
+            {
+            	player1.update_board();
+                player1.increment_Score();
+                player1.draw(window);
+            }
+        }
         //If Player Died
         else
         {
@@ -415,7 +437,7 @@ int main()
         }
         window.display();
     }
-    t1.join();
-    t2.join();
+    // t1.join();
+    // t2.join();
     return EXIT_SUCCESS;
 }
