@@ -1,45 +1,63 @@
 // Server Code
+/**
+  * POPL-II Project-I
+  * Multiplayer Game - ProjecTron
+  * Group - 12
+*/
 #include <SFML/Network.hpp>
 #include <iostream>
 #include <vector>
 #include <thread>
 #include <unistd.h>
 #include <mutex>
+#include <ctime>
+#include <condition_variable>
 #define max_players 4
-//enum direction {up=0, right=1, down=2, left=3, none=4};
-enum status {dead=0, alive=1};
-#define Size_x 184
-#define Size_y 105
+#define Size_x 120
+#define Size_y 70
+
 
 //Common Variables.
-sf::UdpSocket socket;	
-sf::Uint16 new_position_x[max_players], new_position_y[max_players], new_direction[max_players];
-sf::Uint16 old_position_x[max_players], old_position_y[max_players], old_direction[max_players];
+sf::UdpSocket socket;
+int alive_count;
+sf::IpAddress Players_IP[max_players];
+unsigned short Players_PORT[max_players];
 sf::String usernames[max_players];
 std::string s_usernames[max_players];
 
-bool recieved_position[max_players];
-sf::IpAddress Players_IP[max_players];
-unsigned short Players_PORT[max_players];
-int player_count=0;
-std::mutex m;
 
+//Shared Variable Between Threads
+sf::Uint16 new_position_x[max_players], new_position_y[max_players], new_direction[max_players];
+sf::Uint16 old_position_x[max_players], old_position_y[max_players], old_direction[max_players];
+sf::Uint16 packet_send_no, packet_recv_no[max_players], packet_recv_no_old[max_players]; 
+sf::Uint16 speed = 30, player_count, player_status[max_players];
+std::mutex m_location;
+std::mutex m_print;
+
+
+//Function Which Accepts Connections till player 4 or count given
 void accept_connections()
 {
-	bool input;
-	int temp;
 	sf::Packet packet;
 	sf::IpAddress Client_IP;
+	int count;
 	unsigned short Client_Port;
-	std::cout<<"Players Connected : "<<std::endl;
-	while(player_count != 2)
+	std::cout << "Players Connected:" << std::endl;
+	std::cout << "Enter Player Count ? ->  ";
+	std::cin >> count;
+	while(count > max_players)
+	{
+		std::cout << "Maximum Players Allowed is \"" << max_players << "\" \nEnter Player count Again -> ";
+		std::cin >> count;
+	}
+	while(player_count < count)
 	{
 		socket.receive(packet, Client_IP, Client_Port);
 		packet >> usernames[player_count];
 		s_usernames[player_count] = usernames[player_count]; 
 		Players_IP[player_count] = Client_IP;
 		Players_PORT[player_count] = Client_Port;
-		std::cout <<  player_count << s_usernames[player_count] << " - " << Client_IP << ":" << Client_Port << std::endl;
+		// std::cout <<  player_count << " " << s_usernames[player_count] << "   -   " << Client_IP << ":" << Client_Port << std::endl;
 		player_count++;
 	}
 }
@@ -52,134 +70,171 @@ void copy_location(sf::Uint16 old_location[], sf::Uint16 new_location[])
 	}
 }
 
-bool check_input()
-{
-	int temp;
-	std::cout << "Press \"1\" to stop recieving connections" << std::endl;
-	std::cin >> temp;
-	return(temp == 1);
-}
+// void print_location()
+// {
+// 	m_print.lock();
+// 	for(int i=0;i<player_count;i++)
+// 	{
+// 		std::cout << i << " " << player_status[i] << " " << new_direction[i] << " " << new_position_x[i] << " " << new_position_y[i] << std::endl;
+// 	}
+// 	m_print.unlock();
+// }
 
-void print_location()
-{	
-	std::cout<<"printing locations"<<std::endl;
-	for(int i=0;i<player_count;i++)
-	{
-		std::cout << " " << i << " " << new_direction[i] << " " << new_position_x[i] << " " << new_position_y[i] << std::endl;
-	}
 
-}
-void broadcast_players()
-{
-	sf::Packet packet;
-	sf::Uint16 temp,temp1,temp2,temp3;
-	print_location();
-	for(int i=0;i<player_count;i++)
-	{
-		packet << i << new_direction[i] << new_position_x[i] << new_position_y[i];
-	}
-	for(int i=0; i<player_count; i++)
-	{
-		socket.send(packet, Players_IP[i], Players_PORT[i]);
-		m.lock();
-		std::cout << "Sent to player " << i << std::endl;
-		m.unlock();
-	}
 
-}
+//Send Each Client their ID, Player_connected
+//And Initialize their initial Location
 
 void initialize_and_send()
 {
 	sf::Packet packet;
+	srand(time(NULL));
 	for(int i=0; i<player_count; i++)
 	{
 		packet.clear();
 		new_position_x[i] = (sf::Uint16)(rand()%(Size_x/2) + Size_x/4);
 		new_position_y[i] = (sf::Uint16)(rand()%(Size_y/2) + Size_y/4);
-		new_direction[i] = (rand()%4);
-		packet << i;
-		recieved_position[i] = true;
+		new_direction[i] =  (sf::Uint16)(rand()%4);
+		player_status[i] = (sf::Uint16)1;
+		packet << i << player_count << speed;
 		socket.send(packet, Players_IP[i], Players_PORT[i]);
-		m.lock();
-		std::cout << "sent_initial_details to " << i << " " << Players_IP[i] << ":" << Players_PORT[i] << std::endl;
-		m.unlock();
 	}
 }
 
-void recieve_locations()
+
+
+//Send Current Positions of all Players
+void broadcast_players(sf::Uint16 packet_no)
 {
 	sf::Packet packet;
-	sf::IpAddress ip;
-	sf::Uint16 x,y,id,dir,temp;
-	unsigned short port;
-	bool recieved = false;
-	while(true)
-	{
-		packet.clear();
-		socket.receive(packet, ip, port);
-		packet >> temp;
-		packet  >> id >> dir >> x >> y;
-		m.lock();
-		std::cout<<"Recieved : ";
-		std::cout << id <<  " " << dir << " " << x << " "<< y << std::endl;
-		m.unlock();
-		new_position_x[id] = x;
-		new_position_y[id] = y;
-		recieved_position[id] = true;
-	}
-}
-
-bool check_recieved_all()
-{
+	// m_print.lock();
+	packet << packet_no;	
+	// std::cout<<"Send : "<< packet_no;
 	for(int i=0;i<player_count;i++)
 	{
-		if(!recieved_position[i])
-		{	
-			switch(new_direction[i])
+		packet << i << player_status[i] << new_direction[i] << new_position_x[i] << new_position_y[i];
+		// std::cout << i << " "<< player_status[i] << " "<< new_direction[i]<< " " << new_position_x[i] << " "<< new_position_y[i]<<"    ";
+	}
+	// std::cout<<std::endl;
+	// m_print.unlock();
+	for(int i=0; i<player_count; i++)
+	{
+		socket.send(packet, Players_IP[i], Players_PORT[i]);
+	}
+}
+
+
+
+
+
+
+//Recieve Updated Positions form Clients
+//This Function is called by Thread
+void recieve_locations()
+{
+	while(alive_count != 1)
+	{
+		sf::Packet packet;
+		sf::IpAddress ip;
+		unsigned short port;
+		int id;
+		sf::Uint16 x, y, dir, status, t_count;
+		
+		packet.clear();
+		socket.receive(packet, ip, port);
+		packet  >> id >> t_count >> status >> dir >> x >> y;
+
+
+		m_location.lock();
+		if(t_count > packet_recv_no_old[id])
+		{
+			packet_recv_no[id] = t_count;
+			packet_recv_no_old[id] = packet_recv_no[id];
+			new_position_x[id] = x;
+			new_position_y[id] = y;
+			new_direction[id]  = dir;
+			player_status[id]  = status;
+		}
+			// m_print.lock();
+			// std::cout<<"Recv : "<< t_count << " " << id <<  " " << status << " " << dir << " " << x << " "<< y << std::endl;
+			// m_print.unlock();
+		// 	// lastmodified = false;
+		// }
+		// else
+		// {
+		// 	m_print.lock();
+		// 	std::cout<<"Rejected Recv : "<< t_count << " " << id <<  " " << status << " " << dir << " " << x << " "<< y << std::endl;
+		// 	m_print.unlock();
+		// }
+		m_location.unlock();
+	}
+}
+
+
+
+// This Function is called by Thread
+// Send Updated Loction of players after every 50 ms
+void send_locations()
+{
+	//while > 1 player remains
+	while(alive_count != 1)
+	{
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		m_location.lock();
+		packet_send_no++;
+		alive_count = 0;
+
+		// Search If Some Player didnt send his location
+		// If so assume same firection going
+		for(int i=0;i<player_count; i++)
+		{
+			if(player_status[i] == (sf::Uint16)1)
 			{
-				case 0:
-					new_position_y[i] = old_position_y[i] + 1;
-					new_position_x[i] = old_position_x[i];
-					break;
+				alive_count++;
+				if(new_position_x[i] == old_position_x[i] && new_position_y[i] == old_position_y[i])
+				{	
+					switch(new_direction[i])
+					{
+						case 0:
+							new_position_y[i] = new_position_y[i] - 1;
+							new_position_x[i] = new_position_x[i];
+							break;
 
-				case 1:
-					new_position_y[i] = old_position_y[i];
-					new_position_x[i] = old_position_x[i] + 1;
-					break;
+						case 1:
+							new_position_y[i] = new_position_y[i];
+							new_position_x[i] = new_position_x[i] + 1;
+							break;
 
-				case 2:
-					new_position_y[i] = old_position_y[i] -1;
-					new_position_x[i] = old_position_x[i];
-					break;
+						case 2:
+							new_position_y[i] = new_position_y[i] + 1;
+							new_position_x[i] = new_position_x[i];
+							break;
 
-				case 3:
-					new_position_y[i] = old_position_y[i];
-					new_position_x[i] = old_position_x[i] - 1;
-					break;
-
-				case 4:
-					new_position_x[i] = -1;
-					new_position_y[i] = -1;
-					break;		
+						case 3:
+							new_position_y[i] = new_position_y[i];
+							new_position_x[i] = new_position_x[i] - 1;
+							break;
+					}
+					// std::cout<<"modified - "<<new_direction[i]<<" "<<new_position_x[i]<<" "<<new_position_y[i]<<" == "<<old_position_x[i] <<" "<<old_position_y[i]<<" STATUS = "<<player_status[i]<<std::endl;
+					packet_recv_no_old[i] = packet_recv_no_old[i]+1;
+				}
 			}
 		}
-	}
-}
 
-
-
-void send_location(){
-//	for(int temp=0;temp<5;temp++)
-	while(true)
-	{
-		usleep(100000);
-		check_recieved_all();
-		copy_location(old_position_x, new_position_x);
+		//Sent many times so that loss minimized
+		broadcast_players(packet_send_no);
+		broadcast_players(packet_send_no);
 		copy_location(old_position_y, new_position_y);
+		copy_location(old_position_x, new_position_x);
 		copy_location(old_direction, new_direction);
-		broadcast_players();
+		broadcast_players(packet_send_no);
+		broadcast_players(packet_send_no);
+		broadcast_players(packet_send_no);
+		m_location.unlock();
 	}
 }
+
 
 
 int main()
@@ -195,155 +250,39 @@ int main()
 	std::cout << "Connect to "<< server_IP.toString() << ":55002" << " For Incomming Connections" << std::endl;
 
 
-
+	//Accept Connections from Clients
 	accept_connections();
+
+	//Initialize Them
 	initialize_and_send();
-	print_location();
-
-	std::thread t,s;
-	t = std::thread(recieve_locations);
-	s = std::thread(send_location);
-	t.join();
-	s.join();
-
-
-}
+	copy_location(old_position_x, new_position_x);
+	copy_location(old_position_y, new_position_y);
+	copy_location(old_direction, new_direction);
+    
+	// std::cout<<"Init : "<<std::endl;
+	// print_location();
 
 
+	//BroadCast Initial Location
+	broadcast_players(0);
 
+	//Give players time to react
+	sleep(1);
 
+	std::thread t_send, t_recieve;
+	t_send = std::thread(send_locations);
+	t_recieve = std::thread(recieve_locations);
 
+	// Wait For Thread to finish
+	t_send.join();
+	t_recieve.join();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	/*
-	while(true)
-	{
-		//Recieve Next Move of all( time wait 100 ms) (blocking Recieve so in thread)
-		//sf::Time time1 = clock.getElapsedTime();
-		//while(time1 <= t1)
-		//sf::Time time1 = clock.getElapsedTime();
-
-
-		//Thread To Recieve Permanently
-		
-			socket.receive(packet_server_recieve, Client_IP, Client_Port);
-			std::cout<<"Recieve: ";
-			packet_server_recieve >> temp >> id >> positionx >> positiony;
-			std::cout << id << " " << positionx << " "<< positiony << std::endl;
-			new_position_x[id] = positionx;
-			new_position_y[id] = positiony;
-
-
-			sf::Time time1 = clock.getElapsedTime();
-			//if(time1 >= t1)
-			//{
-				for(i=0;i<player_count;i++)
-				{
-					packet_server_send_all << i << new_position_x[i] << new_position_y[i];
-				}
-				for(i=0;i<player_count;i++)
-				{
-					socket.send(packet_server_send_all, Players_IP[i], Players_PORT[i]);
-				}
-				//sf::Time time2 = clock.restart();
-
-				packet_server_send_all.clear();
-				packet_server_recieve.clear();
-			//}
-	}
-	std::cout << endl;
+	
+	// for(int i=0;i<player_count ; i++)
+	// {
+	// 	if(player_status[i]==(sf::Uint16)1)
+	// 		std::cout<<"User = "<<s_usernames[i]<<" Won"<<std::endl;
+	// }
+	// print_location();
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
- 
-Temp Not Working Sometimes 
-
-
-
-	//Print Server IP address
-	server_IP = sf::IpAddress::getLocalAddress();
-	cout << "Server Ip Address is "<< server_IP.toString() << endl;
-
-
-
-	//Sender = IP of Client who sent data
-	socket.receive(packet_server_recieve, Client_IP, Client_Port);
-	packet_server_recieve >> new_position_x >> new_position_y >> player_id;
-	std::cout << Client_IP.toString() << " said - " << player_id << " " << new_position_y << " " << new_position_x << std::endl;
-
-
-
-
-	//Send Back To Same Client
-	socket.send(packet, Client_IP, Client_PORT);
-*/
-
